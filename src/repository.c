@@ -172,6 +172,8 @@ static git_repository *repository_alloc(void)
 {
 	git_repository *repo = git__calloc(1, sizeof(git_repository));
 
+	repo->submodule_cache = 0;
+
 	if (repo == NULL ||
 		git_cache_init(&repo->objects) < 0)
 		goto on_error;

@@ -632,6 +632,20 @@ GIT_EXTERN(int) git_submodule_location(
 	unsigned int *location_status,
 	git_submodule *submodule);
 
+/**
+ * Load and cache all submodules.
+ *
+ * Because the `.gitmodules` file is unstraucture, loading submodules is an
+ * O(N) operation.  Any operation (such as `git_rebase_init` that requires
+ * accessing all submodules is O(N^2) w.r.t. the number of submodules, if it
+ * has to look each one up individually.  This function loads all submodules
+ * and caches them so that subsequent calls to `git_submodule_lookup` are O(1).
+ *
+ * @param repo the repository whose submodules will be cached.
+ */
+GIT_EXTERN(int) git_submodule_cache_all(
+	git_repository *repo);
+
 /** @} */
 GIT_END_DECL
 #endif
