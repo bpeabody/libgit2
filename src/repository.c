@@ -109,6 +109,7 @@ void git_repository__cleanup(git_repository *repo)
 {
 	assert(repo);
 
+	git_submodule_clear_cache(repo);
 	git_cache_clear(&repo->objects);
 	git_attr_cache_flush(repo);
 
@@ -171,6 +172,8 @@ static bool valid_repository_path(git_buf *repository_path)
 static git_repository *repository_alloc(void)
 {
 	git_repository *repo = git__calloc(1, sizeof(git_repository));
+
+	repo->submodule_cache = 0;
 
 	if (repo == NULL ||
 		git_cache_init(&repo->objects) < 0)
