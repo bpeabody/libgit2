@@ -895,9 +895,10 @@ static int maybe_modified(
 		return error;
 	}
 
-	return diff_delta__from_two(
+	const int ret = diff_delta__from_two(
 		diff, status, oitem, omode, nitem, nmode,
 		git_oid_iszero(&noid) ? NULL : &noid, matched_pathspec);
+	return ret;
 }
 
 static bool entry_is_prefixed(

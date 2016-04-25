@@ -169,6 +169,7 @@ static bool checkout_is_workdir_modified(
 	git_oid oid;
 	const git_index_entry *ie;
 
+
 	/* handle "modified" submodule */
 	if (wditem->mode == GIT_FILEMODE_COMMIT) {
 		git_submodule *sm;
@@ -182,10 +183,12 @@ static bool checkout_is_workdir_modified(
 		}
 
 		if (git_submodule_status(&sm_status, data->repo, wditem->path, GIT_SUBMODULE_IGNORE_UNSPECIFIED) < 0 ||
-			GIT_SUBMODULE_STATUS_IS_WD_DIRTY(sm_status))
+			GIT_SUBMODULE_STATUS_IS_WD_DIRTY(sm_status)) {
 			rval = true;
-		else if ((sm_oid = git_submodule_wd_id(sm)) == NULL)
+		}
+		else if ((sm_oid = git_submodule_wd_id(sm)) == NULL) {
 			rval = false;
+		}
 		else
 			rval = (git_oid__cmp(&baseitem->id, sm_oid) != 0);
 
@@ -638,8 +641,10 @@ static int checkout_action(
 	while (1) {
 		const git_index_entry *wd = *wditem;
 
-		if (!wd)
+		if (!wd) {
+			printf("NOWD\n");
 			return checkout_action_no_wd(action, data, delta);
+		}
 
 		cmp = strcomp(wd->path, delta->old_file.path);
 
@@ -1276,8 +1281,11 @@ static int checkout_get_actions(
 	git_diff_delta *delta;
 	size_t i, *counts = NULL;
 	uint32_t *actions = NULL;
-
+	clock_t start = clock();
+	printf("start of COA\n");
 	git_pool_init(&pathpool, 1);
+
+	printf("first deltas: %d\n", data->diff->deltas.length);
 
 	if (data->opts.paths.count > 0 &&
 		git_pathspec__vinit(&pathspec, &data->opts.paths, &pathpool) < 0)
@@ -1286,6 +1294,9 @@ static int checkout_get_actions(
 	if ((error = git_iterator_current(&wditem, workdir)) < 0 &&
 		error != GIT_ITEROVER)
 		goto fail;
+	printf("sdafds COA: %d\n",
+		   (clock() - start) * 1000 / CLOCKS_PER_SEC);
+	start = clock();
 
 	deltas = &data->diff->deltas;
 
@@ -1296,6 +1307,11 @@ static int checkout_get_actions(
 		error = -1;
 		goto fail;
 	}
+	printf("second COA: %d\n",
+		   (clock() - start) * 1000 / CLOCKS_PER_SEC);
+	start = clock();
+
+	printf("num deltas: %d\n", deltas->length);
 
 	git_vector_foreach(deltas, i, delta) {
 		if ((error = checkout_action(&act, data, delta, workdir, &wditem, &pathspec)) == 0)
@@ -1303,6 +1319,12 @@ static int checkout_get_actions(
 
 		if (error != 0)
 			goto fail;
+
+//		printf("%d, old %s, new %s, act: %d\n",
+//			   i,
+//			   delta->old_file.path,
+//			   delta->new_file.path,
+//			   act);
 
 		actions[i] = act;
 
@@ -1316,9 +1338,15 @@ static int checkout_get_actions(
 			counts[CHECKOUT_ACTION__CONFLICT]++;
 	}
 
+	printf("after FE {COA: %d\n",
+		   (clock() - start) * 1000 / CLOCKS_PER_SEC);
+	start = clock();
+
 	error = checkout_remaining_wd_items(data, workdir, wditem, &pathspec);
-	if (error)
+	if (error) {
+		printf("EXITING\n");
 		goto fail;
+	}
 
 	counts[CHECKOUT_ACTION__REMOVE] += data->removes.length;
 
@@ -1330,19 +1358,26 @@ static int checkout_get_actions(
 			counts[CHECKOUT_ACTION__CONFLICT] == 1 ?
 			"conflict prevents" : "conflicts prevent");
 		error = GIT_ECONFLICT;
+		printf("failed econ\n");
 		goto fail;
 	}
 
 
 	if ((error = checkout_get_remove_conflicts(data, workdir, &pathspec)) < 0 ||
-		(error = checkout_get_update_conflicts(data, workdir, &pathspec)) < 0)
+		(error = checkout_get_update_conflicts(data, workdir, &pathspec)) < 0) {
+		printf("Failed ruc\n");
 		goto fail;
+	}
 
 	counts[CHECKOUT_ACTION__REMOVE_CONFLICT] = git_vector_length(&data->remove_conflicts);
 	counts[CHECKOUT_ACTION__UPDATE_CONFLICT] = git_vector_length(&data->update_conflicts);
 
 	git_pathspec__vfree(&pathspec);
 	git_pool_clear(&pathpool);
+
+	printf("last COA: %d\n",
+		   (clock() - start) * 1000 / CLOCKS_PER_SEC);
+	start = clock();
 
 	return 0;
 
@@ -2566,14 +2601,18 @@ int git_checkout_iterator(
 	 * actions to be taken, plus look for conflicts and send notifications,
 	 * then loop through conflicts.
 	 */
-	if ((error = checkout_get_actions(&actions, &counts, &data, workdir)) != 0)
+	if ((error = checkout_get_actions(&actions, &counts, &data, workdir)) != 0) {
+		printf("DONE HERE\n");
 		goto cleanup;
+	}
 
 	data.total_steps = counts[CHECKOUT_ACTION__REMOVE] +
 		counts[CHECKOUT_ACTION__REMOVE_CONFLICT] +
 		counts[CHECKOUT_ACTION__UPDATE_BLOB] +
 		counts[CHECKOUT_ACTION__UPDATE_SUBMODULE] +
 		counts[CHECKOUT_ACTION__UPDATE_CONFLICT];
+
+	printf("Steps: %d\n", data.total_steps);
 
 	report_progress(&data, NULL); /* establish 0 baseline */
 
